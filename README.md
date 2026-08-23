@@ -14,22 +14,16 @@
 
 ## 🚀 一键部署指令
 
-### 场景一：已有 X-UI，仅安装路由补丁
-在已经安装好原版 [vaxilu/x-ui](https://github.com/vaxilu/x-ui) 并且至少登录过一次面板的机器上，执行：
-```bash
-bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/xui-patch.sh)
-```
-
-### 场景二：新机器全新安装（交互式版）
-适合新初始化的机器，会自动安装官方 X-UI 并要求你输入账号密码，安装完毕后自动植入路由补丁。
+### 场景一：新机器全新安装（全能交互式版）
+适合新初始化的机器，会自动进行**环境优化（提权、开启 BBR 加速、放行防火墙）**，然后安装官方 X-UI（按提示输入账号密码），最后自动植入路由补丁。
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/install_xui_interactive.sh)
 ```
 
-### 场景三：新机器全新安装（私用静默版）
-适合在后台使用（如开机脚本自动化部署），账号密码在脚本顶部硬编码配置，全过程无需人工干预。
+### 场景二：已有 X-UI，仅安装路由补丁
+如果在某台机器上已经安装好了 X-UI，只想补充多 IP 路由功能，执行以下单行命令：
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/install_xui_private.sh)
+bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/xui-patch.sh)
 ```
 
 ## 📖 日常使用说明
