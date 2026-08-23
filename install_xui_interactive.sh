@@ -5,14 +5,33 @@
 
 echo -e "\033[36m>>> 开始安装 X-UI 面板及路由补丁 (交互模式)...\033[0m"
 
-# 1. 检查权限
-[ "$EUID" -ne 0 ] && echo "请用 root 运行" && exit 1
+# 0. 自动提权 & 环境准备
+if [ "$EUID" -ne 0 ]; then
+  sudo bash "$0" "$@"
+  exit
+fi
+
+# 1. 开启 BBR 加速
+echo "正在检查 BBR 状态..."
+if ! grep -q "net.core.default_qdisc=cake" /etc/sysctl.conf; then
+    echo "net.core.default_qdisc=cake" >> /etc/sysctl.conf
+    echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
+    sysctl -p >/dev/null 2>&1
+    echo "BBR 已开启。"
+fi
 
 # 2. 安装依赖
 command -v curl >/dev/null 2>&1 || (apt-get update && apt-get install -y curl || yum install -y curl)
 command -v python3 >/dev/null 2>&1 || (apt-get update -y && apt-get install -y python3)
 
-# 3. 安装原版 X-UI (交互式)
+# 3. 设置防火墙 (放行所有)
+echo "正在清理防火墙规则..."
+iptables -F
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+
+# 4. 安装原版 X-UI (交互式)
 echo -e "\033[33m即将运行官方 X-UI 安装脚本，请根据提示设置账号密码和端口：\033[0m"
 bash <(curl -4 -Ls https://raw.githubusercontent.com/vaxilu/x-ui/master/install.sh)
 
@@ -25,7 +44,7 @@ fi
 systemctl restart x-ui
 sleep 5
 
-# 4. 植入自动化补丁
+# 5. 植入自动化补丁
 XRAY_BIN="/usr/local/x-ui/bin/xray-linux-amd64"
 if [ ! -f "$XRAY_BIN" ] && [ ! -f "${XRAY_BIN}_real" ]; then
     echo -e "\033[31m警告: 未找到 Xray 核心，补丁植入跳过。\033[0m"
@@ -92,4 +111,6 @@ systemctl restart x-ui
 sleep 2
 
 echo -e "\n\033[32m✅ X-UI 面板及多 IP 自动路由补丁部署完毕！\033[0m"
+echo -e "🎉 BBR已开启，防火墙已放行，X-UI安装完成。"
 echo -e "\033[33m【提示】\033[0m以后加新节点时，只要填写【监听 IP】，出口流量即可自动绑定。"
+
