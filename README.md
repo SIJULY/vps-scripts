@@ -14,15 +14,27 @@
 
 ## 🚀 一键部署指令
 
-在已经安装好原版 [vaxilu/x-ui](https://github.com/vaxilu/x-ui) 并且至少登录过一次面板的机器上，执行以下命令：
-
+### 场景一：已有 X-UI，仅安装路由补丁
+在已经安装好原版 [vaxilu/x-ui](https://github.com/vaxilu/x-ui) 并且至少登录过一次面板的机器上，执行：
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/xui-patch.sh)
 ```
 
+### 场景二：新机器全新安装（交互式版）
+适合新初始化的机器，会自动安装官方 X-UI 并要求你输入账号密码，安装完毕后自动植入路由补丁。
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/install_xui_interactive.sh)
+```
+
+### 场景三：新机器全新安装（私用静默版）
+适合在后台使用（如开机脚本自动化部署），账号密码在脚本顶部硬编码配置，全过程无需人工干预。
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/install_xui_private.sh)
+```
+
 ## 📖 日常使用说明
 
-1. 部署补丁成功后，打开你的 X-UI 网页控制面板。
+1. 部署成功后，打开你的 X-UI 网页控制面板。
 2. 进入“入站列表”，点击添加节点。
 3. 在 **监听 IP (Listen IP)** 这一栏中，填入你的辅助私有 IP（例如 `10.0.1.93`）。
 4. 正常配置其他项（端口、协议等），点击“保存”/“添加”。
