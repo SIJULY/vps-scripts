@@ -59,11 +59,11 @@ for i in "${!args[@]}"; do
 done
 
 if [ -n "$CONFIG_FILE" ]; then
-    python3 /usr/local/x-ui/bin/patch_config.py "$CONFIG_FILE" "${CONFIG_FILE}.patched"
+    python3 /usr/local/x-ui/bin/patch_config.py "$CONFIG_FILE" "${CONFIG_FILE}_patched.json"
     if [ $? -eq 0 ]; then
         for i in "${!args[@]}"; do
             if [[ "${args[$i]}" == "-c" || "${args[$i]}" == "-config" ]]; then
-                args[$i+1]="${CONFIG_FILE}.patched"
+                args[$i+1]="${CONFIG_FILE}_patched.json"
                 break
             fi
         done
