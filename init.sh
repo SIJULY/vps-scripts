@@ -1,7 +1,7 @@
 #!/bin/bash
 # =================================================================
 # 服务器开机一键全自动初始化脚本
-# 包含：修改Root/SSH、网络/依赖检查、BBR优化、Docker挂机程序、X-UI、独立Xray节点及多IP补丁
+# 包含：修改Root/SSH、网络/依赖检查、BBR优化、Docker挂机程序、X-UI、固定7000端口Xray节点及多IP补丁
 #
 # 一键运行：
 #   bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/init.sh)
@@ -15,7 +15,7 @@ XUI_USER="sijuly"
 XUI_PASS='Ayou2Mke#65%a1'
 XUI_PORT="54321"
 
-# Xray 独立节点配置
+# Xray 独立节点配置 (固定 7000 端口与 VLESS TCP 协议)
 XRAY_PORT="7000"
 XRAY_UUID="1483c30c-ae2c-4130-f643-c6139d199c42"
 
@@ -169,10 +169,13 @@ BASH_EOF
     systemctl restart x-ui
 fi
 
-# ==================== 6. 部署 233boy Xray 独立节点 ====================
-echo ">>> [5/6] 安装 233boy Xray 核心并添加静态 TCP 节点..."
+# ==================== 6. 部署 233boy Xray 固定端口节点 ====================
+echo ">>> [5/6] 安装 233boy Xray 核心并配置 7000 端口 VLESS-TCP 节点..."
 wget -qO- https://github.com/233boy/Xray/raw/main/install.sh | bash
-xray add tcp "${XRAY_PORT}" "${XRAY_UUID}"
+
+# 删除默认生成的随机端口 REALITY 节点，强制追加绑定的 7000 端口 VLESS-TCP 节点
+xray del 1
+xray add vless_tcp "${XRAY_PORT}" "${XRAY_UUID}"
 
 # ==================== 7. 部署结果展示 ====================
 echo ">>> [6/6] 获取系统信息..."
@@ -186,10 +189,10 @@ echo -e "2. SSH 远程密码登录: 已开启 (Port: 22)"
 echo -e "3. Docker 挂机容器: tm, repocket, earnfm, watchtower 运行中"
 echo -e "4. X-UI 面板控制台: http://${IP}:${XUI_PORT}"
 echo -e "   账号: ${XUI_USER} | 密码: ${XUI_PASS}"
-echo -e "5. 静态 Xray 节点信息:"
-echo -e "   协议: TCP | 端口: ${XRAY_PORT} | UUID: ${XRAY_UUID}"
+echo -e "5. 静态 Xray 节点信息 (VLESS + TCP):"
+echo -e "   协议: VLESS | 传输: TCP | 端口: ${XRAY_PORT} | UUID: ${XRAY_UUID}"
 echo -e "6. 多 IP 入站/出站同 IP 路由绑定: 已激活"
 echo -e "=================================================="
-echo "⚠️  注意: 请确保 AWS 安全组已放行端口: 22, ${XUI_PORT}, ${XRAY_PORT}"
+echo "⚠️  注意: 请确保 AWS 安全组入站规则已放行 TCP 端口: 22, ${XUI_PORT}, ${XRAY_PORT}"
 echo "===== 脚本完成时间: $(date) ====="
 exit 0
