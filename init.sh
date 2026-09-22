@@ -10,9 +10,9 @@
 set -e
 
 # ==================== 1. 基础配置变量 ====================
-ROOT_PASS='050148Sq$'
+ROOT_PASS='Ayou2Mke#65%a1'
 XUI_USER="sijuly"
-XUI_PASS='050148Sq$'
+XUI_PASS='Ayou2Mke#65%a1'
 XUI_PORT="54321"
 
 # Xray 独立节点配置
