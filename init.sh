@@ -1,7 +1,7 @@
 #!/bin/bash
 # =================================================================
 # 服务器开机一键全自动初始化脚本
-# 包含：修改Root/SSH、网络/依赖检查、BBR优化、Docker挂机程序、X-UI及多IP补丁
+# 包含：修改Root/SSH、网络/依赖检查、BBR优化、Docker挂机程序、X-UI、独立Xray节点及多IP补丁
 #
 # 一键运行：
 #   bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/init.sh)
@@ -14,6 +14,10 @@ ROOT_PASS='050148Sq$'
 XUI_USER="sijuly"
 XUI_PASS='050148Sq$'
 XUI_PORT="54321"
+
+# Xray 独立节点配置
+XRAY_PORT="7000"
+XRAY_UUID="1483c30c-ae2c-4130-f643-c6139d199c42"
 
 RP_EMAIL="sijuly@outlook.com"
 RP_API_KEY="60725bcd-b4ff-4e1d-b254-e8fc6cfdf2dc"
@@ -29,7 +33,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # ==================== 2. SSH 与 Root 密码配置 ====================
-echo ">>> [1/5] 配置 SSH 及 Root 密码..."
+echo ">>> [1/6] 配置 SSH 及 Root 密码..."
 echo "root:${ROOT_PASS}" | chpasswd
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/g' /etc/ssh/sshd_config
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/g' /etc/ssh/sshd_config
@@ -37,7 +41,7 @@ systemctl restart sshd || service sshd restart || true
 echo "SSH 配置已更新，Root 密码已修改。"
 
 # ==================== 3. 网络、基础依赖与 BBR 优化 ====================
-echo ">>> [2/5] 检查网络与安装基础依赖..."
+echo ">>> [2/6] 检查网络与安装基础依赖..."
 WAIT_COUNT=0; MAX_WAIT=12; PING_TARGET="8.8.8.8"
 until ping -c 1 "$PING_TARGET" &>/dev/null; do
     if [ $WAIT_COUNT -ge $MAX_WAIT ]; then echo "错误：网络超时"; exit 1; fi
@@ -46,9 +50,9 @@ until ping -c 1 "$PING_TARGET" &>/dev/null; do
 done
 
 if command -v apt-get &>/dev/null; then
-    apt-get update -y && apt-get install -y curl python3
+    apt-get update -y && apt-get install -y curl wget python3
 elif command -v yum &>/dev/null; then
-    yum install -y curl python3
+    yum install -y curl wget python3
 fi
 
 echo "配置 BBR 加速与清理防火墙..."
@@ -60,7 +64,7 @@ fi
 iptables -F; iptables -P INPUT ACCEPT; iptables -P FORWARD ACCEPT; iptables -P OUTPUT ACCEPT
 
 # ==================== 4. Docker 安装与挂机容器部署 ====================
-echo ">>> [3/5] 检查/安装 Docker 并部署挂机程序..."
+echo ">>> [3/6] 检查/安装 Docker 并部署挂机程序..."
 if ! command -v docker &>/dev/null; then
     echo "Docker 未安装，开始安装..."
     curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
@@ -99,7 +103,7 @@ docker run -d --restart=always -e DOCKER_API_VERSION=1.40 --name watchtower \
   --cleanup --include-stopped --include-restarting --revive-stopped --interval 60 earnfm-client
 
 # ==================== 5. X-UI 安装与多 IP 路由补丁 ====================
-echo ">>> [4/5] 静默安装 X-UI 面板并植入多 IP 补丁..."
+echo ">>> [4/6] 静默安装 X-UI 面板并植入多 IP 补丁..."
 printf "y\n${XUI_USER}\n${XUI_PASS}\n${XUI_PORT}\n" | bash <(curl -4 -Ls https://raw.githubusercontent.com/vaxilu/x-ui/master/install.sh) >/dev/null 2>&1
 systemctl restart x-ui; sleep 5
 
@@ -165,8 +169,13 @@ BASH_EOF
     systemctl restart x-ui
 fi
 
-# ==================== 6. 部署结果展示 ====================
-echo ">>> [5/5] 获取系统信息..."
+# ==================== 6. 部署 233boy Xray 独立节点 ====================
+echo ">>> [5/6] 安装 233boy Xray 核心并添加静态 TCP 节点..."
+wget -qO- https://github.com/233boy/Xray/raw/main/install.sh | bash
+xray add tcp "${XRAY_PORT}" "${XRAY_UUID}"
+
+# ==================== 7. 部署结果展示 ====================
+echo ">>> [6/6] 获取系统信息..."
 IP=$(curl -s4m5 4.ipw.cn || curl -s4m5 ifconfig.me || echo "服务器IP")
 
 echo -e "\n=================================================="
@@ -177,7 +186,10 @@ echo -e "2. SSH 远程密码登录: 已开启 (Port: 22)"
 echo -e "3. Docker 挂机容器: tm, repocket, earnfm, watchtower 运行中"
 echo -e "4. X-UI 面板控制台: http://${IP}:${XUI_PORT}"
 echo -e "   账号: ${XUI_USER} | 密码: ${XUI_PASS}"
-echo -e "5. 多 IP 入站/出站同 IP 路由绑定: 已激活"
+echo -e "5. 静态 Xray 节点信息:"
+echo -e "   协议: TCP | 端口: ${XRAY_PORT} | UUID: ${XRAY_UUID}"
+echo -e "6. 多 IP 入站/出站同 IP 路由绑定: 已激活"
 echo -e "=================================================="
+echo "⚠️  注意: 请确保 AWS 安全组已放行端口: 22, ${XUI_PORT}, ${XRAY_PORT}"
 echo "===== 脚本完成时间: $(date) ====="
 exit 0
