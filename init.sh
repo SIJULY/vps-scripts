@@ -173,12 +173,10 @@ fi
 echo ">>> [5/6] 安装 233boy Xray 核心并配置 7000 端口 VLESS-TCP 节点..."
 wget -qO- https://github.com/233boy/Xray/raw/main/install.sh | bash
 
-# 直接生成固定配置（VLESS + TCP + 7000端口 + 指定UUID）
-cat > /etc/xray/config.json << EOF
+# 清空 233boy 默认生成的随机节点文件，写入固定 7000 端口配置
+rm -rf /etc/xray/conf/*
+cat > /etc/xray/conf/7000_vless.json << EOF
 {
-  "log": {
-    "loglevel": "warning"
-  },
   "inbounds": [
     {
       "port": ${XRAY_PORT},
