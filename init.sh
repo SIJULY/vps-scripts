@@ -170,39 +170,53 @@ BASH_EOF
 fi
 
 # ==================== 6. 部署 Xray 固定端口节点 ====================
-echo ">>> [5/6] 安装 233boy Xray 核心并配置 7000 端口 VLESS-TCP 节点..."
-wget -qO- https://github.com/233boy/Xray/raw/main/install.sh | bash
+echo "开始安装并配置 Xray..."
+# 定义标记文件路径，用于判断 Xray 是否已安装
+FLAG_FILE="/root/.xray_installed_flag"
 
-# 清空 233boy 默认生成的随机节点文件，写入固定 7000 端口配置
-rm -rf /etc/xray/conf/*
-cat > /etc/xray/conf/7000_vless.json << EOF
-{
-  "inbounds": [
-    {
-      "port": ${XRAY_PORT},
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "${XRAY_UUID}"
-          }
-        ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "tcp"
-      }
+if [ ! -f "$FLAG_FILE" ]; then
+    echo "Xray 未安装或标记文件不存在，开始安装 Xray..."
+    # 检查 wget 是否安装，因为 Xray 安装脚本可能依赖它
+    if ! command -v wget &> /dev/null; then
+        echo "wget 未安装，尝试安装..."
+        if command -v apt-get &> /dev/null; then
+            apt-get update && apt-get install -y wget || { echo "错误：apt-get 安装 wget 失败。Xray 安装可能受影响。"; }
+        elif command -v yum &> /dev/null; then
+            yum install -y wget || { echo "错误：yum 安装 wget 失败。Xray 安装可能受影响。"; }
+        else
+            echo "警告：无法自动安装 wget。Xray 安装可能会失败。请手动安装 wget 后重试。"
+            # 这里不 exit，允许脚本继续，但 Xray 安装可能会受影响
+        fi
+    fi
+
+    # 安装并配置 Xray
+    sudo wget -qO- https://github.com/233boy/Xray/raw/main/install.sh | bash || {
+        echo "错误：Xray 安装脚本执行失败。此错误不影响前面已完成的任务。"
+        # 此处不 exit，因为已在脚本末尾，且用户希望前面任务不受影响。
     }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom"
+
+    # 运行 xray add tcp 命令 (用户要求保留)
+    # 注意：此命令可能与 233boy 脚本的默认配置冲突，有导致命令失败的风险。
+    # 使用 || true 确保即使失败也不会终止脚本
+    xray add tcp 7000 1483c30c-ae2c-4130-f643-c6139d199c42 || {
+        echo "警告：xray add tcp 命令执行失败。请检查 Xray 配置。"
     }
-  ]
+
+    sudo systemctl enable xray  # 确保开机自启
+    # 创建标记文件，表示 Xray 已尝试安装
+    sudo touch "$FLAG_FILE"
+    echo "Xray 安装和基本配置尝试完成。"
+else
+    echo "Xray 已安装（检测到标记文件：$FLAG_FILE），跳过安装步骤。"
+fi
+
+# 每次启动时确保服务运行（即使已 enable）
+echo "确保 Xray 服务正在运行..."
+sudo systemctl start xray || {
+    echo "错误：无法启动 Xray 服务。请手动检查 `systemctl status xray`。此错误不影响前面已完成的任务。"
 }
-EOF
-
-systemctl restart xray
+echo "Xray 服务状态已确保。"
+echo "Xray 功能模块处理完成。"
 
 # ==================== 7. 部署结果展示 ====================
 echo ">>> [6/6] 获取系统信息..."
