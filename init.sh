@@ -169,21 +169,42 @@ BASH_EOF
     systemctl restart x-ui
 fi
 
-# ==================== 6. 部署 233boy Xray 固定端口节点 ====================
+# ==================== 6. 部署 Xray 固定端口节点 ====================
 echo ">>> [5/6] 安装 233boy Xray 核心并配置 7000 端口 VLESS-TCP 节点..."
 wget -qO- https://github.com/233boy/Xray/raw/main/install.sh | bash
 
-# 1. 删除默认生成的随机端口 REALITY 节点
-xray del 1
+# 直接生成固定配置（VLESS + TCP + 7000端口 + 指定UUID）
+cat > /etc/xray/config.json << EOF
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "port": ${XRAY_PORT},
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "${XRAY_UUID}"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom"
+    }
+  ]
+}
+EOF
 
-# 2. 新增 VLESS-TCP 节点 (此时会自动分配随机端口和UUID，节点编号定为 1)
-xray add vless_tcp
-
-# 3. 强制修改节点 1 的端口为你设定的 7000
-xray port 1 "${XRAY_PORT}"
-
-# 4. 强制修改节点 1 的 UUID 为你设定的 UUID
-xray id 1 "${XRAY_UUID}"
+systemctl restart xray
 
 # ==================== 7. 部署结果展示 ====================
 echo ">>> [6/6] 获取系统信息..."
