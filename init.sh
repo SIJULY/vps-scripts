@@ -89,18 +89,21 @@ elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then TM_IMAGE="traffmonet
 else TM_IMAGE="traffmonetizer/cli_v2:latest"; fi
 
 cleanup_container "tm" "$TM_IMAGE"
+docker pull "$TM_IMAGE"
 docker run -d --restart=always --name tm "$TM_IMAGE" start accept --token "$TM_TOKEN"
 
 cleanup_container "repocket" "repocket/repocket"
+docker pull repocket/repocket
 docker run -d --restart=always -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API_KEY" --name repocket repocket/repocket
 
 cleanup_container "earnfm-client" "earnfm/earnfm-client:latest"
+docker pull earnfm/earnfm-client:latest
 docker run -d --restart=always -e EARNFM_TOKEN="$EARNFM_TOKEN" --name earnfm-client earnfm/earnfm-client:latest
 
 cleanup_container "watchtower" "containrrr/watchtower"
 docker run -d --restart=always -e DOCKER_API_VERSION=1.40 --name watchtower \
   -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower \
-  --cleanup --include-stopped --include-restarting --revive-stopped --interval 60 earnfm-client
+  --cleanup --include-stopped --include-restarting --revive-stopped --interval 3600 tm repocket earnfm-client
 
 # ==================== 5. X-UI 安装与多 IP 路由补丁 ====================
 echo ">>> [4/6] 静默安装 X-UI 面板并植入多 IP 补丁..."
