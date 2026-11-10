@@ -107,7 +107,7 @@ docker run -d --restart=always -e DOCKER_API_VERSION=1.40 --name watchtower \
 
 # ==================== 5. X-UI 安装与多 IP 路由补丁 ====================
 echo ">>> [4/6] 静默安装 X-UI 面板并植入多 IP 补丁..."
-printf "y\n${XUI_USER}\n${XUI_PASS}\n${XUI_PORT}\n" | bash <(curl -4 -Ls https://raw.githubusercontent.com/vaxilu/x-ui/master/install.sh) >/dev/null 2>&1
+printf '%s\n' "y" "${XUI_USER}" "${XUI_PASS}" "${XUI_PORT}" | bash <(curl -4 -Ls https://raw.githubusercontent.com/vaxilu/x-ui/master/install.sh) >/dev/null 2>&1
 systemctl restart x-ui; sleep 5
 
 if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
