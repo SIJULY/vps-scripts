@@ -1,68 +1,42 @@
 #!/bin/bash
 # =================================================================
-# 服务器开机一键全自动初始化脚本
-# 包含：修改Root/SSH、网络/依赖检查、BBR优化、Docker挂机程序、固定7000端口Xray节点
+# 服务器开机一键初始化脚本（精简版）
+# 只部署三个挂机容器：TM、Repocket、EarnFM
+# 其他（SSH/Root 改密、BBR、X-UI、Xray）已全部删除
 #
 # 一键运行：
 #   bash <(curl -sL https://raw.githubusercontent.com/SIJULY/vps-scripts/main/init.sh)
 # =================================================================
-
-set -e
-
-# ==================== 1. 基础配置变量 ====================
-ROOT_PASS='Ayou2Mke#65%a1'
-# Xray 独立节点配置 (固定 7000 端口与 VLESS TCP 协议)
-XRAY_PORT="7000"
-XRAY_UUID="1483c30c-ae2c-4130-f643-c6139d199c42"
-
-RP_EMAIL="sijuly@outlook.com"
-RP_API_KEY="60725bcd-b4ff-4e1d-b254-e8fc6cfdf2dc"
-TM_TOKEN="WovlB9V4nql+H2MQ1FAcv6HBgy5plSrA/VRv4S25d+c="
-EARNFM_TOKEN="ce203a4c-627b-4b44-934d-58689ca6cf7f"
-# =========================================================
-
-echo "===== 开始执行开机初始化脚本: $(date) ====="
 
 if [ "$EUID" -ne 0 ]; then
     echo "正在申请 Root 权限..."
     exec sudo bash "$0" "$@"
 fi
 
-# ==================== 2. SSH 与 Root 密码配置 ====================
-echo ">>> [1/5] 配置 SSH 及 Root 密码..."
-echo "root:${ROOT_PASS}" | chpasswd
-sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/g' /etc/ssh/sshd_config
-sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/g' /etc/ssh/sshd_config
-systemctl restart sshd || service sshd restart || true
-echo "SSH 配置已更新，Root 密码已修改。"
+echo "===== 开始执行开机初始化脚本: $(date) ====="
 
-# ==================== 3. 网络、基础依赖与 BBR 优化 ====================
-echo ">>> [2/5] 检查网络与安装基础依赖..."
+# 挂机容器凭据
+RP_EMAIL="sijuly@outlook.com"
+RP_API_KEY="60725bcd-b4ff-4e1d-b254-e8fc6cfdf2dc"
+TM_TOKEN="WovlB9V4nql+H2MQ1FAcv6HBgy5plSrA/VRv4S25d+c="
+EARNFM_TOKEN="ce203a4c-627b-4b44-934d-58689ca6cf7f"
+
+# ==================== 等待网络就绪 ====================
 WAIT_COUNT=0; MAX_WAIT=12; PING_TARGET="8.8.8.8"
 until ping -c 1 "$PING_TARGET" &>/dev/null; do
-    if [ $WAIT_COUNT -ge $MAX_WAIT ]; then echo "错误：网络超时"; exit 1; fi
+    if [ $WAIT_COUNT -ge $MAX_WAIT ]; then echo "警告：网络未就绪，仍继续尝试拉取镜像"; break; fi
     echo "网络未就绪，等待 5 秒... ($((WAIT_COUNT+1))/$MAX_WAIT)"; sleep 5
     WAIT_COUNT=$((WAIT_COUNT+1))
 done
 
-if command -v apt-get &>/dev/null; then
-    apt-get update -y && apt-get install -y curl wget python3
-elif command -v yum &>/dev/null; then
-    yum install -y curl wget python3
-fi
-
-echo "配置 BBR 加速与清理防火墙..."
-if ! grep -q "net.core.default_qdisc=cake" /etc/sysctl.conf; then
-    echo "net.core.default_qdisc=cake" >> /etc/sysctl.conf
-    echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
-    sysctl -p >/dev/null 2>&1 || true
-fi
-iptables -F; iptables -P INPUT ACCEPT; iptables -P FORWARD ACCEPT; iptables -P OUTPUT ACCEPT
-
-# ==================== 4. Docker 安装与挂机容器部署 ====================
-echo ">>> [3/5] 检查/安装 Docker 并部署挂机程序..."
+# ==================== 安装 Docker ====================
 if ! command -v docker &>/dev/null; then
     echo "Docker 未安装，开始安装..."
+    if command -v apt-get &>/dev/null; then
+        apt-get update -y && apt-get install -y curl
+    elif command -v yum &>/dev/null; then
+        yum install -y curl
+    fi
     curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
     rm -f get-docker.sh
     systemctl start docker && systemctl enable docker || true
@@ -70,7 +44,7 @@ fi
 
 cleanup_container() {
     local name=$1 image=$2
-    if docker ps -a --format '{{.Names}}' | grep -Eq "^${name}\$"; then
+    if docker ps -a --format '{{.Names}}' | grep -Eq "^${name}$"; then
         docker stop "$name" >/dev/null 2>&1 || true; docker rm "$name" >/dev/null 2>&1 || true
     fi
     local old_ids=$(docker ps -a -q --filter "ancestor=${image}")
@@ -84,85 +58,67 @@ if [ "$ARCH" = "x86_64" ]; then TM_IMAGE="traffmonetizer/cli_v2:latest"
 elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then TM_IMAGE="traffmonetizer/cli_v2:arm64v8"
 else TM_IMAGE="traffmonetizer/cli_v2:latest"; fi
 
-cleanup_container "tm" "$TM_IMAGE"
-docker pull "$TM_IMAGE"
-docker run -d --restart=always --name tm "$TM_IMAGE" start accept --token "$TM_TOKEN"
-
-cleanup_container "repocket" "repocket/repocket"
-docker pull repocket/repocket
-docker run -d --restart=always -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API_KEY" --name repocket repocket/repocket
-
-cleanup_container "earnfm-client" "earnfm/earnfm-client:latest"
-docker pull earnfm/earnfm-client:latest
-docker run -d --restart=always -e EARNFM_TOKEN="$EARNFM_TOKEN" --name earnfm-client earnfm/earnfm-client:latest
-
-cleanup_container "watchtower" "containrrr/watchtower"
-docker run -d --restart=always -e DOCKER_API_VERSION=1.40 --name watchtower \
-  -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower \
-  --cleanup --include-stopped --include-restarting --revive-stopped --interval 3600 tm repocket earnfm-client
-
-# ==================== 5. 部署 Xray 固定端口节点 ====================
-echo "开始安装并配置 Xray..."
-# 定义标记文件路径，用于判断 Xray 是否已安装
-FLAG_FILE="/root/.xray_installed_flag"
-
-if [ ! -f "$FLAG_FILE" ]; then
-    echo "Xray 未安装或标记文件不存在，开始安装 Xray..."
-    # 检查 wget 是否安装，因为 Xray 安装脚本可能依赖它
-    if ! command -v wget &> /dev/null; then
-        echo "wget 未安装，尝试安装..."
-        if command -v apt-get &> /dev/null; then
-            apt-get update && apt-get install -y wget || { echo "错误：apt-get 安装 wget 失败。Xray 安装可能受影响。"; }
-        elif command -v yum &> /dev/null; then
-            yum install -y wget || { echo "错误：yum 安装 wget 失败。Xray 安装可能受影响。"; }
+# 启动一个容器：拉取失败或启动后未运行，重试一次；单个容器失败不影响其他两个
+FAILED=""
+start_container() {
+    local name=$1 image=$2; shift 2
+    echo ">>> 部署 $name ..."
+    cleanup_container "$name" "$image"
+    local attempt=1
+    while [ $attempt -le 2 ]; do
+        if docker pull "$image" && docker run -d --restart=always --name "$name" "$@" "$image"; then
+            sleep 5
+            if [ "$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null)" = "running" ]; then
+                echo "$name: 运行中"
+                return 0
+            fi
+            echo "$name: 启动后未运行，重试 ($attempt/2)..."
         else
-            echo "警告：无法自动安装 wget。Xray 安装可能会失败。请手动安装 wget 后重试。"
-            # 这里不 exit，允许脚本继续，但 Xray 安装可能会受影响
+            echo "$name: 拉取/启动失败，重试 ($attempt/2)..."
         fi
-    fi
-
-    # 安装并配置 Xray
-    sudo wget -qO- https://github.com/233boy/Xray/raw/main/install.sh | bash || {
-        echo "错误：Xray 安装脚本执行失败。此错误不影响前面已完成的任务。"
-        # 此处不 exit，因为已在脚本末尾，且用户希望前面任务不受影响。
-    }
-
-    # 运行 xray add tcp 命令 (用户要求保留)
-    # 注意：此命令可能与 233boy 脚本的默认配置冲突，有导致命令失败的风险。
-    # 使用 || true 确保即使失败也不会终止脚本
-    xray add tcp 7000 1483c30c-ae2c-4130-f643-c6139d199c42 || {
-        echo "警告：xray add tcp 命令执行失败。请检查 Xray 配置。"
-    }
-
-    sudo systemctl enable xray  # 确保开机自启
-    # 创建标记文件，表示 Xray 已尝试安装
-    sudo touch "$FLAG_FILE"
-    echo "Xray 安装和基本配置尝试完成。"
-else
-    echo "Xray 已安装（检测到标记文件：$FLAG_FILE），跳过安装步骤。"
-fi
-
-# 每次启动时确保服务运行（即使已 enable）
-echo "确保 Xray 服务正在运行..."
-sudo systemctl start xray || {
-    echo "错误：无法启动 Xray 服务。请手动检查 `systemctl status xray`。此错误不影响前面已完成的任务。"
+        docker rm -f "$name" >/dev/null 2>&1 || true
+        attempt=$((attempt+1))
+    done
+    echo "$name: 失败，请检查 Token 与 docker logs $name"
+    FAILED="$FAILED $name"
+    return 1
 }
-echo "Xray 服务状态已确保。"
-echo "Xray 功能模块处理完成。"
 
-# ==================== 6. 部署结果展示 ====================
-echo ">>> [5/5] 获取系统信息..."
-IP=$(curl -s4m5 4.ipw.cn || curl -s4m5 ifconfig.me || echo "服务器IP")
+# 注意：start_container 的 docker run 参数里，最后一个镜像名由函数追加，
+# tm 需要把镜像后的启动参数放在镜像名之前，所以 tm 单独处理
+echo ">>> 部署 tm ..."
+cleanup_container "tm" "$TM_IMAGE"
+attempt=1
+while [ $attempt -le 2 ]; do
+    if docker pull "$TM_IMAGE" && docker run -d --restart=always --name tm "$TM_IMAGE" start accept --token "$TM_TOKEN"; then
+        sleep 5
+        if [ "$(docker inspect -f '{{.State.Status}}' tm 2>/dev/null)" = "running" ]; then echo "tm: 运行中"; break; fi
+        echo "tm: 启动后未运行，重试 ($attempt/2)..."
+    else
+        echo "tm: 拉取/启动失败，重试 ($attempt/2)..."
+    fi
+    docker rm -f tm >/dev/null 2>&1 || true
+    attempt=$((attempt+1))
+    if [ $attempt -gt 2 ]; then echo "tm: 失败，请检查 Token 与 docker logs tm"; FAILED="$FAILED tm"; fi
+done
 
-echo -e "\n=================================================="
-echo -e "✅ 服务器初始化已全部完成！"
-echo -e "=================================================="
-echo -e "1. Root 密码已设置: ${ROOT_PASS}"
-echo -e "2. SSH 远程密码登录: 已开启 (Port: 22)"
-echo -e "3. Docker 挂机容器: tm, repocket, earnfm, watchtower 运行中"
-echo -e "4. 静态 Xray 节点信息 (VLESS + TCP):"
-echo -e "   协议: VLESS | 传输: TCP | 端口: ${XRAY_PORT} | UUID: ${XRAY_UUID}"
-echo -e "=================================================="
-echo "⚠️  注意: 请确保 AWS 安全组入站规则已放行 TCP 端口: 22, ${XRAY_PORT}"
+start_container "repocket" "repocket/repocket" -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API_KEY" || true
+start_container "earnfm-client" "earnfm/earnfm-client:latest" -e EARNFM_TOKEN="$EARNFM_TOKEN" || true
+
+# ==================== 校验三个容器 ====================
+echo ""
+echo "=================================================="
+docker ps -a --format '{{.Names}} {{.Status}} {{.Image}}'
+echo "=================================================="
+MISSING=""
+for c in tm repocket earnfm-client; do
+    if [ "$(docker inspect -f '{{.State.Status}}' "$c" 2>/dev/null)" != "running" ]; then MISSING="$MISSING $c"; fi
+done
+if [ -n "$MISSING" ]; then
+    echo "❌ 未运行的容器:$MISSING"
+    echo "===== 脚本完成时间: $(date) ====="
+    exit 1
+fi
+echo "✅ 三个容器全部运行中：tm、repocket、earnfm-client"
 echo "===== 脚本完成时间: $(date) ====="
 exit 0
